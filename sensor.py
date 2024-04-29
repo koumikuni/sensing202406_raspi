@@ -6,16 +6,16 @@ from pythonosc import udp_client
 # ポート番号のリスト
 ports = [11001, 11002, 11003, 11004, 11005]
 
-# このラズパイが使用するポート番号
+# このラズベリーパイが使用するポート番号
 port_index = 0  # 0から始まるインデックスで指定
 port = ports[port_index]
 
-# OSCクライアントをセットアップ
+# OSCクライアントの設定
 ip = "192.168.10.112"  # 送信先のIPアドレス
 client = udp_client.SimpleUDPClient(ip, port)
 
-# I2C接続を初期化
-i2c = board.I2C()  # SCL, SDAに接続
+# I2C接続の初期化
+i2c = board.I2C()  # SCL、SDAに接続
 
 # センサー初期化を試みる関数
 def try_init_sensor(xg_address, mag_address):
@@ -26,16 +26,17 @@ def try_init_sensor(xg_address, mag_address):
         return None
 
 # センサーオブジェクトの初期化
-sensor1 = try_init_sensor(0x6A, 0x1C)
-sensor2 = try_init_sensor(0x6B, 0x1E)
+sensorL = try_init_sensor(0x6A, 0x1C)
+sensorR = try_init_sensor(0x6B, 0x1E)
 
-# スケールを選択（見つかったセンサーのみ）
-for sensor in [sensor1, sensor2]:
+# スケールの選択（見つかったセンサーのみ）
+for sensor in [sensorL, sensorR]:
     if sensor is not None:
         sensor.accel_range = adafruit_lsm9ds1.ACCELRANGE_4G
         sensor.mag_gain = adafruit_lsm9ds1.MAGGAIN_12GAUSS
         sensor.gyro_scale = adafruit_lsm9ds1.GYROSCALE_500DPS
 
+# センサーデータの読み取り関数
 def read_sensor_data(sensor):
     if sensor is None:
         return (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
@@ -45,20 +46,20 @@ def read_sensor_data(sensor):
     return (accel_x, accel_y, accel_z), (mag_x, mag_y, mag_z), (gyro_x, gyro_y, gyro_z)
 
 while True:
-    # センサー1のデータ読み取りと送信
-    accel1, mag1, gyro1 = read_sensor_data(sensor1)
-    client.send_message("/raspi/1/accel", accel1)
-    client.send_message("/raspi/1/mag", mag1)
-    client.send_message("/raspi/1/gyro", gyro1)
+    # センサーLからのデータ読み取りと送信
+    accelL, magL, gyroL = read_sensor_data(sensorL)
+    client.send_message("/raspi/L/accel", accelL)
+    client.send_message("/raspi/L/mag", magL)
+    client.send_message("/raspi/L/gyro", gyroL)
 
-    # センサー2のデータ読み取りと送信
-    accel2, mag2, gyro2 = read_sensor_data(sensor2)
-    client.send_message("/raspi/2/accel", accel2)
-    client.send_message("/raspi/2/mag", mag2)
-    client.send_message("/raspi/2/gyro", gyro2)
+    # センサーRからのデータ読み取りと送信
+    accelR, magR, gyroR = read_sensor_data(sensorR)
+    client.send_message("/raspi/R/accel", accelR)
+    client.send_message("/raspi/R/mag", magR)
+    client.send_message("/raspi/R/gyro", gyroR)
 
-    # データ表示と送信ポートの確認
-    print(f'ポート {port}: センサー1 - 加速度: X={accel1[0]:.2f}, Y={accel1[1]:.2f}, Z={accel1[2]:.2f}, 磁気: X={mag1[0]:.2f}, Y={mag1[1]:.2f}, Z={mag1[2]:.2f}, ジャイロ: X={gyro1[0]:.2f}, Y={gyro1[1]:.2f}, Z={gyro1[2]:.2f}')
-    print(f'ポート {port}: センサー2 - 加速度: X={accel2[0]:.2f}, Y={accel2[1]:.2f}, Z={accel2[2]:.2f}, 磁気: X={mag2[0]:.2f}, Y={mag2[1]:.2f}, Z={mag2[2]:.2f}, ジャイロ: X={gyro2[0]:.2f}, Y={gyro2[1]:.2f}, Z={gyro2[2]:.2f}')
+    # データの表示と送信ポートの確認
+    print(f'ポート {port}: センサーL - 加速度: X={accelL[0]:.2f}, Y={accelL[1]:.2f}, Z={accelL[2]:.2f}, 磁気: X={magL[0]:.2f}, Y={magL[1]:.2f}, Z={magL[2]:.2f}, ジャイロ: X={gyroL[0]:.2f}, Y={gyroL[1]:.2f}, Z={gyroL[2]:.2f}')
+    print(f'ポート {port}: センサーR - 加速度: X={accelR[0]:.2f}, Y={accelR[1]:.2f}, Z={accelR[2]:.2f}, 磁気: X={magR[0]:.2f}, Y={magR[1]:.2f}, Z={magR[2]:.2f}, ジャイロ: X={gyroR[0]:.2f}, Y={gyroR[1]:.2f}, Z={gyroR[2]:.2f}')
 
     time.sleep(0.01)
