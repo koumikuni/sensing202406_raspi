@@ -39,7 +39,6 @@ directory_path = '/home/sense/sensor_data'
 filename = f"{directory_path}/sensordata_{datetime.now().strftime('%Y%m%d-%H-%M-%S')}.csv"
 with open(filename, 'w', newline='') as f:
     writer = csv.writer(f)
-    # ヘッダーの書き込み
     writer.writerow(["Time (ms)", "Accel LX", "Accel LY", "Accel LZ", "Mag LX", "Mag LY", "Mag LZ", "Gyro LX", "Gyro LY", "Gyro LZ",
                      "Accel RX", "Accel RY", "Accel RZ", "Mag RX", "Mag RY", "Mag RZ", "Gyro RX", "Gyro RY", "Gyro RZ"])
 
@@ -47,17 +46,34 @@ with open(filename, 'w', newline='') as f:
 def read_sensor_data(sensor, start_time):
     if sensor is None:
         return [0.0] * 9
-    accel_x, accel_y, accel_z = sensor.acceleration
-    mag_x, mag_y, mag_z = sensor.magnetic
-    gyro_x, gyro_y, gyro_z = sensor.gyro
-    return [accel_x, accel_y, accel_z, mag_x, mag_y, mag_z, gyro_x, gyro_y, gyro_z]
+    try:
+        accel_x, accel_y, accel_z = sensor.acceleration
+        mag_x, mag_y, mag_z = sensor.magnetic
+        gyro_x, gyro_y, gyro_z = sensor.gyro
+        return [accel_x, accel_y, accel_z, mag_x, mag_y, mag_z, gyro_x, gyro_y, gyro_z]
+    except Exception as e:
+        print("読み取りエラー:", e)
+        return [0.0] * 9
+
+# 成功と失敗のカウント
+total_attempts = 0
+successful_reads = 0
 
 start_time = time.perf_counter()
 
 while True:
+    total_attempts += 2  # LとRの両方の試みをカウント
+
     # センサーLとRからデータを読み取り
     dataL = read_sensor_data(sensorL, start_time)
     dataR = read_sensor_data(sensorR, start_time)
+
+    # 成功回数を更新
+    if dataL != [0.0] * 9:
+        successful_reads += 1
+    if dataR != [0.0] * 9:
+        successful_reads += 1
+
     current_time = (time.perf_counter() - start_time) * 1000  # 経過時間（ミリ秒）
 
     # OSCで送信
@@ -72,5 +88,9 @@ while True:
     with open(filename, 'a', newline='') as f:
         writer = csv.writer(f)
         writer.writerow([current_time] + dataL + dataR)
+
+    # 成功率を表示
+    success_rate = (successful_reads / total_attempts) * 100
+    print(f"成功率: {success_rate:.2f}%")
 
     time.sleep(0.01)
