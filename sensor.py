@@ -16,16 +16,23 @@ client = udp_client.SimpleUDPClient(ip, port)
 i2c = board.I2C()  # SCL、SDAに接続
 
 # センサー初期化を試みる関数
-def try_init_sensor(xg_address, mag_address):
-    try:
-        return adafruit_lsm9ds1.LSM9DS1_I2C(i2c, mag_address=mag_address, xg_address=xg_address)
-    except ValueError:
-        print(f"センサーアドレス {xg_address}/{mag_address} が見つかりませんでした。")
-        return None
+# センサー初期化を試みる関数（エラーが出た場合に再試行）
+def try_init_sensor(xg_address, mag_address, retries=5):
+    attempt = 0
+    while attempt < retries:
+        try:
+            return adafruit_lsm9ds1.LSM9DS1_I2C(i2c, mag_address=mag_address, xg_address=xg_address)
+        except ValueError:
+            print(f"センサーアドレス {xg_address}/{mag_address} が見つかりませんでした。再試行 {attempt+1}/{retries}")
+            time.sleep(1)  # 1秒待つ
+            attempt += 1
+    print(f"センサーの初期化に{retries}回試みましたが、接続できませんでした。")
+    return None
+
 
 # センサーオブジェクトの初期化
-sensorL = try_init_sensor(0x6A, 0x1C)
-sensorR = try_init_sensor(0x6B, 0x1E)
+sensorL = try_init_sensor(0x6A, 0x1C, retries=10)
+sensorR = try_init_sensor(0x6B, 0x1E, retries=10)
 
 # スケールの選択（見つかったセンサーのみ）
 for sensor in [sensorL, sensorR]:
