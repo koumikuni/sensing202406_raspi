@@ -35,7 +35,8 @@ for sensor in [sensorL, sensorR]:
         sensor.gyro_scale = adafruit_lsm9ds1.GYROSCALE_500DPS
 
 # CSVファイルの準備
-filename = f"sensordata_{datetime.now().strftime('%Y%m%d-%H-%M-%S')}.csv"
+directory_path = '/home/sense/sensor_data'
+filename = f"{directory_path}/sensordata_{datetime.now().strftime('%Y%m%d-%H-%M-%S')}.csv"
 with open(filename, 'w', newline='') as f:
     writer = csv.writer(f)
     # ヘッダーの書き込み
