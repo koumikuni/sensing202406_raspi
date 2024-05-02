@@ -31,7 +31,9 @@ def try_init_sensor(xg_address, mag_address, retries=5):
 
 
 # センサーオブジェクトの初期化
+print("L")
 sensorL = try_init_sensor(0x6A, 0x1C, retries=10)
+print("R")
 sensorR = try_init_sensor(0x6B, 0x1E, retries=10)
 
 # スケールの選択（見つかったセンサーのみ）
