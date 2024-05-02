@@ -9,7 +9,7 @@ from datetime import datetime
 port = 11001
 
 # OSCクライアントの設定
-ip = "192.168.10.112"  # 送信先のIPアドレス
+ip = "172.23.129.128"  # 送信先のIPアドレス
 client = udp_client.SimpleUDPClient(ip, port)
 
 # I2C接続の初期化
