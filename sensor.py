@@ -9,7 +9,7 @@ from datetime import datetime
 port = 11001
 
 # OSCクライアントの設定
-ip = "172.23.129.128"  # 送信先のIPアドレス
+ip = "169.254.179.100"  # 送信先のIPアドレス
 client = udp_client.SimpleUDPClient(ip, port)
 
 # I2C接続の初期化
@@ -103,3 +103,4 @@ while True:
     print(f"成功率: {success_rate:.2f}%")
 
     time.sleep(0.01)
+
