@@ -2,6 +2,7 @@ import time
 import csv
 from pythonosc import udp_client
 import sys
+import signal
 
 # コマンドラインから設定を取得
 ip = sys.argv[1]
@@ -10,6 +11,15 @@ csv_file_path = sys.argv[3]
 
 client = udp_client.SimpleUDPClient(ip, port)
 
+def signal_handler(sig, frame):
+    print('Ctrl+Cが押されました。処理を終了前にこの処理を実行します。')
+    # 必要な処理をここに追加
+    client.send_message("/playStatus", 0)
+    exit(0)  # プログラムを終了
+
+# シグナルハンドラを設定
+signal.signal(signal.SIGINT, signal_handler)
+
 def read_csv_and_send_osc(csv_path):
     try:
         with open(csv_path, 'r') as file:
@@ -17,6 +27,7 @@ def read_csv_and_send_osc(csv_path):
             # next(reader)  # ヘッダー行をスキップ
             start_time = time.time()
             initial_timestamp = float(reader[1][0])  # 最初のデータ行のタイムスタンプ
+            client.send_message("/playStatus", 0)
 
             for row in reader[1:]:
                 current_timestamp = float(row[0])
@@ -33,11 +44,15 @@ def read_csv_and_send_osc(csv_path):
                 send_osc_data("/raspi/R/gyro", row[16:19])
                 client.send_message("/filename", csv_file_path.split('/')[-1])
                 client.send_message("/current_timestamp", current_timestamp)
+                client.send_message("/playStatus", 1)
+            client.send_message("/playStatus", 0)
 
     except FileNotFoundError:
         print(f"指定されたファイルが見つかりません: {csv_path}")
+        client.send_message("/playStatus", 0)
     except Exception as e:
         print(f"エラーが発生しました: {e}")
+        client.send_message("/playStatus", 0)
 
 def send_osc_data(address, data):
     float_data = [float(d) for d in data]
