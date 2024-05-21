@@ -4,6 +4,7 @@ import adafruit_lsm9ds1
 from pythonosc import udp_client
 import csv
 from datetime import datetime
+import threading
 
 # このラズベリーパイが使用するポート番号
 port = 11001
@@ -16,7 +17,6 @@ client = udp_client.SimpleUDPClient(ip, port)
 i2c = board.I2C()  # SCL、SDAに接続
 
 # センサー初期化を試みる関数
-# センサー初期化を試みる関数（エラーが出た場合に再試行）
 def try_init_sensor(xg_address, mag_address, retries=5):
     attempt = 0
     while attempt < retries:
@@ -28,7 +28,6 @@ def try_init_sensor(xg_address, mag_address, retries=5):
             attempt += 1
     print(f"センサーの初期化に{retries}回試みましたが、接続できませんでした。")
     return None
-
 
 # センサーオブジェクトの初期化
 print("L")
@@ -64,43 +63,96 @@ def read_sensor_data(sensor, start_time):
         print("読み取りエラー:", e)
         return [0.0] * 9
 
-# 成功と失敗のカウント
-total_attempts = 0
-successful_reads = 0
+# キャリブレーションの処理
+def calibrate(sensor, duration=5):
+    global gyro_biasL, gyro_biasR, isCalibrating
+    isCalibrating = 1
+    start_time = time.perf_counter()
+    gyro_data = []
+    while (time.perf_counter() - start_time) < duration:
+        dataL = read_sensor_data(sensorL, start_time)
+        dataR = read_sensor_data(sensorR, start_time)
+        if dataL != [0.0] * 9:
+            gyro_data.append(dataL[6:])
+        if dataR != [0.0] * 9:
+            gyro_data.append(dataR[6:])
+        time.sleep(0.01)
+    
+    if gyro_data:
+        gyro_biasL = [sum(d[0] for d in gyro_data) / len(gyro_data), 
+                      sum(d[1] for d in gyro_data) / len(gyro_data), 
+                      sum(d[2] for d in gyro_data) / len(gyro_data)]
+        gyro_biasR = [sum(d[3] for d in gyro_data) / len(gyro_data), 
+                      sum(d[4] for d in gyro_data) / len(gyro_data), 
+                      sum(d[5] for d in gyro_data) / len(gyro_data)]
+    isCalibrating = 0
 
-start_time = time.perf_counter()
+# メインループ
+def main_loop():
+    global isCalibrating
+    total_attempts = 0
+    successful_reads = 0
+    start_time = time.perf_counter()
+    gyro_biasL = [0.0, 0.0, 0.0]
+    gyro_biasR = [0.0, 0.0, 0.0]
 
-while True:
-    total_attempts += 2  # LとRの両方の試みをカウント
+    while True:
+        total_attempts += 2  # LとRの両方の試みをカウント
+        dataL = read_sensor_data(sensorL, start_time)
+        dataR = read_sensor_data(sensorR, start_time)
 
-    # センサーLとRからデータを読み取り
-    dataL = read_sensor_data(sensorL, start_time)
-    dataR = read_sensor_data(sensorR, start_time)
+        # 成功回数を更新
+        if dataL != [0.0] * 9:
+            successful_reads += 1
+        if dataR != [0.0] * 9:   
+            successful_reads += 1
 
-    # 成功回数を更新
-    if dataL != [0.0] * 9:
-        successful_reads += 1
-    if dataR != [0.0] * 9:
-        successful_reads += 1
+        # ゼロ点補正
+        dataL[6:] = [dataL[i] - gyro_biasL[i-6] for i in range(6, 9)]
+        dataR[6:] = [dataR[i] - gyro_biasR[i-6] for i in range(6, 9)]
 
-    current_time = (time.perf_counter() - start_time) * 1000  # 経過時間（ミリ秒）
+        current_time = (time.perf_counter() - start_time) * 1000  # 経過時間（ミリ秒）
 
-    # OSCで送信
-    client.send_message("/raspi/L/accel", dataL[:3])
-    client.send_message("/raspi/L/mag", dataL[3:6])
-    client.send_message("/raspi/L/gyro", dataL[6:])
-    client.send_message("/raspi/R/accel", dataR[:3])
-    client.send_message("/raspi/R/mag", dataR[3:6])
-    client.send_message("/raspi/R/gyro", dataR[6:])
+        # OSCで送信
+        client.send_message("/raspi/L/accel", dataL[:3])
+        client.send_message("/raspi/L/mag", dataL[3:6])
+        client.send_message("/raspi/L/gyro", dataL[6:])
+        client.send_message("/raspi/R/accel", dataR[:3])   
+        client.send_message("/raspi/R/mag", dataR[3:6])
+        client.send_message("/raspi/R/gyro", dataR[6:])
+        client.send_message("/I2C/connection/L", 1 if sensorL else 0)
+        client.send_message("/I2C/connection/R", 1 if sensorR else 0)
+        client.send_message("/calibrating", isCalibrating)
+        client.send_message("/current_timestamp", current_time)
+        client.send_message("/playStatus", 1)
 
-    # CSVにデータを書き込み
-    with open(filename, 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([current_time] + dataL + dataR)
+        # CSVにデータを書き込み
+        with open(filename, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([current_time] + dataL + dataR)
 
-    # 成功率を表示
-    success_rate = (successful_reads / total_attempts) * 100
-    print(f"成功率: {success_rate:.2f}%")
+        time.sleep(0.01)
 
-    time.sleep(0.01)
+# コマンドラインオプション処理
+def handle_input():
+    global isCalibrating
+    while True:
+        user_input = input("オプション: c: キャリブレーション, s: 成功率の表示: ")
+        if user_input == 'c' and isCalibrating == 0:
+            print("キャリブレーション開始...")
+            calibrate_thread = threading.Thread(target=calibrate, args=(sensorL, 5))
+            calibrate_thread.start()
+        elif user_input == 's':
+            success_rate = (successful_reads / total_attempts) * 100
+            print(f"成功率: {success_rate:.2f}%")
 
+# シグナルハンドラ
+def signal_handler(sig, frame):
+    print('Ctrl+Cが押されました。処理を終了前にこの処理を実行します。')
+    client.send_message("/playStatus", 0)
+    sys.exit(0)  # プログラムを終了
+
+if __name__ == "__main__":
+    input_thread = threading.Thread(target=handle_input)
+    input_thread.start()
+    main_loop()
