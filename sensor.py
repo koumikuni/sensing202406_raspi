@@ -5,6 +5,8 @@ from pythonosc import udp_client
 import csv
 from datetime import datetime
 import threading
+import signal
+import sys
 
 # このラズベリーパイが使用するポート番号
 port = 11001
@@ -50,6 +52,13 @@ with open(filename, 'w', newline='') as f:
     writer.writerow(["Time (ms)", "Accel LX", "Accel LY", "Accel LZ", "Mag LX", "Mag LY", "Mag LZ", "Gyro LX", "Gyro LY", "Gyro LZ",
                      "Accel RX", "Accel RY", "Accel RZ", "Mag RX", "Mag RY", "Mag RZ", "Gyro RX", "Gyro RY", "Gyro RZ"])
 
+# グローバル変数の初期化
+gyro_biasL = [0.0, 0.0, 0.0]
+gyro_biasR = [0.0, 0.0, 0.0]
+isCalibrating = 0
+total_attempts = 0
+successful_reads = 0
+
 # センサーデータの読み取り関数
 def read_sensor_data(sensor, start_time):
     if sensor is None:
@@ -89,13 +98,9 @@ def calibrate(sensor, duration=5):
 
 # メインループ
 def main_loop():
-    global isCalibrating
-    total_attempts = 0
-    successful_reads = 0
+    global total_attempts, successful_reads, isCalibrating, gyro_biasL, gyro_biasR
     start_time = time.perf_counter()
-    gyro_biasL = [0.0, 0.0, 0.0]
-    gyro_biasR = [0.0, 0.0, 0.0]
-
+    
     while True:
         total_attempts += 2  # LとRの両方の試みをカウント
         dataL = read_sensor_data(sensorL, start_time)
@@ -135,7 +140,7 @@ def main_loop():
 
 # コマンドラインオプション処理
 def handle_input():
-    global isCalibrating
+    global isCalibrating, successful_reads, total_attempts
     while True:
         user_input = input("オプション: c: キャリブレーション, s: 成功率の表示: ")
         if user_input == 'c' and isCalibrating == 0:
@@ -151,6 +156,9 @@ def signal_handler(sig, frame):
     print('Ctrl+Cが押されました。処理を終了前にこの処理を実行します。')
     client.send_message("/playStatus", 0)
     sys.exit(0)  # プログラムを終了
+
+# シグナルハンドラの登録
+signal.signal(signal.SIGINT, signal_handler)
 
 if __name__ == "__main__":
     input_thread = threading.Thread(target=handle_input)
