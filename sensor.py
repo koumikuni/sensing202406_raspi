@@ -12,7 +12,7 @@ import sys
 port = 11001
 
 # OSCクライアントの設定
-ip = "192.168.10.113"  # 送信先のIPアドレス
+ip = "192.168.2.12"  # 送信先のIPアドレス
 client = udp_client.SimpleUDPClient(ip, port)
 
 # I2C接続の初期化
